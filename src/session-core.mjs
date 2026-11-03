@@ -17,6 +17,7 @@ export class SessionCore {
     this.clock = clock; this.leaseMs = leaseMs; this.capacity = capacity;
     this.transport = transport;
     this.clients = new Set([ownerId]);
+    this.revoked = new Set();
     this.pending = new Set();
     this.controller = { actorId: ownerId, until: clock() + leaseMs };
     this.events = []; this.sequence = 0; this.receipts = new Map();
@@ -29,7 +30,9 @@ export class SessionCore {
     return item;
   }
   attach(actorId) {
-    required(actorId); this.clients.add(actorId);
+    required(actorId);
+    if (this.revoked.has(actorId)) throw new SessionError("REVOKED");
+    this.clients.add(actorId);
     this.emit("ATTACHED", actorId);
     return this.snapshot(actorId, this.sequence - 1);
   }
@@ -70,6 +73,8 @@ export class SessionCore {
   revoke(actorId, targetId) {
     this.requireAttached(actorId); required(targetId);
     if (actorId !== this.ownerId) throw new SessionError("NOT_AUTHORIZED");
+    if (targetId === this.ownerId) throw new SessionError("OWNER_REVOKE_FORBIDDEN");
+    this.revoked.add(targetId);
     this.pending.delete(targetId);
     if (this.controller?.actorId === targetId) this.controller = null;
     this.clients.delete(targetId);
