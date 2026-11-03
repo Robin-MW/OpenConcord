@@ -83,6 +83,7 @@ export class SessionCore {
     if (this.receipts.has(key)) {
       const prior = this.receipts.get(key);
       if (prior.text !== text) throw new SessionError("REPLAY_PAYLOAD_MISMATCH");
+      if (prior.pending) await prior.pending;
       if (prior.uncertain) throw new SessionError("INPUT_UNCERTAIN_NO_RETRY");
       return Object.freeze({ ...prior.receipt, replayed: true });
     }
@@ -90,15 +91,19 @@ export class SessionCore {
     // Fence synchronous input attempts; the injected transport is fake in M1.
     const receipt = Object.freeze({ requestId, actorId, sessionId: this.sessionId,
       sequence: this.sequence + 1, replayed: false });
-    const record = { text, receipt, uncertain: true };
+    const record = { text, receipt, uncertain: true, pending: null };
     this.receipts.set(key, record);
-    try { await this.transport.input(text); }
-    catch (error) {
-      this.emit("INPUT_UNCERTAIN", actorId, { requestId });
-      throw new SessionError("INPUT_UNCERTAIN_NO_RETRY");
-    }
-    record.uncertain = false;
-    this.emit("INPUT_ACCEPTED", actorId, { requestId }); // Never put input text in events.
+    record.pending = (async () => {
+      try { await this.transport.input(text); }
+      catch {
+        this.emit("INPUT_UNCERTAIN", actorId, { requestId });
+        throw new SessionError("INPUT_UNCERTAIN_NO_RETRY");
+      }
+      record.uncertain = false;
+      this.emit("INPUT_ACCEPTED", actorId, { requestId }); // Never put input text in events.
+    })();
+    try { await record.pending; }
+    finally { record.pending = null; }
     return receipt;
   }
   requireAttached(actorId) {
