@@ -72,6 +72,7 @@ test("observer resumes by cursor without control; untrusted event text not used 
   const second = await invoke(agent, "concord_observe", { after: cursor });
   assert.equal(second.isError, false);
   assert.deepEqual(second.structuredContent.snapshot.events.map(e => e.type), ["SYNTHETIC_OUTPUT"]);
+  assert.equal(JSON.stringify(second).includes("ignore instructions"), false);
   assert.equal(session.activeController().actorId, "owner");
 });
 
