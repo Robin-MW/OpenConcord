@@ -14,6 +14,17 @@ const ok = (value) => Object.freeze({
   isError: false, structuredContent: Object.freeze({ ok: true, ...value })
 });
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const metadataOnly = (snapshot) => Object.freeze({
+  sessionId: snapshot.sessionId,
+  sequence: snapshot.sequence,
+  gap: snapshot.gap,
+  controller: snapshot.controller,
+  events: Object.freeze(snapshot.events.map(event => Object.freeze({
+    sequence: event.sequence, type: event.type, actorId: event.actorId,
+    ...(typeof event.targetId === "string" ? { targetId: event.targetId } : {}),
+    ...(typeof event.requestId === "string" ? { requestId: event.requestId } : {})
+  })))
+});
 const exact = (args, names) => isObject(args) &&
   Object.keys(args).every(k => names.includes(k));
 const validActor = (s) => typeof s === "string" &&
@@ -44,7 +55,7 @@ export function createMockMcpClient({ session, actorId } = {}) {
               return fail("INVALID_ARGUMENTS");
             const snapshot = session.snapshot(actorId, args.after ?? 0);
             // Only fixture event metadata crosses this boundary.
-            return ok({ snapshot });
+            return ok({ snapshot: metadataOnly(snapshot) });
           }
           case "concord_request_control": {
             if (!exact(args, []) || Object.keys(args).length !== 0)
