@@ -64,6 +64,8 @@ test("owner revocation disconnects actor and blocks both input and observation",
   session.grantControl("owner", "observer");
   session.revoke("owner", "observer");
   throwsCode(() => session.snapshot("observer", 0), "NOT_ATTACHED");
+  throwsCode(() => session.attach("observer"), "REVOKED");
+  throwsCode(() => session.revoke("owner", "owner"), "OWNER_REVOKE_FORBIDDEN");
   await rejectsCode(() => session.input("observer", "r", "no"), "NOT_ATTACHED");
   assert.equal(writes.length, 0);
 });
@@ -82,8 +84,7 @@ test("uncertain transport failure is fenced from automatic replay", async () => 
   const session = new SessionCore({ sessionId: "s", ownerId: "owner",
     transport: { input: async () => { calls++; throw Error("ambiguous"); } } });
   await rejectsCode(() => session.input("owner", "x", "command"), "INPUT_UNCERTAIN_NO_RETRY");
-  const duplicate = await session.input("owner", "x", "command");
-  assert.equal(duplicate.replayed, true);
+  await rejectsCode(() => session.input("owner", "x", "command"), "INPUT_UNCERTAIN_NO_RETRY");
   assert.equal(calls, 1);
   assert.equal(session.snapshot("owner", 0).events.at(-1).type, "INPUT_UNCERTAIN");
 });
