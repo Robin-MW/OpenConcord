@@ -83,18 +83,21 @@ export class SessionCore {
     if (this.receipts.has(key)) {
       const prior = this.receipts.get(key);
       if (prior.text !== text) throw new SessionError("REPLAY_PAYLOAD_MISMATCH");
+      if (prior.uncertain) throw new SessionError("INPUT_UNCERTAIN_NO_RETRY");
       return Object.freeze({ ...prior.receipt, replayed: true });
     }
     if (this.activeController()?.actorId !== actorId) throw new SessionError("NOT_CONTROLLER");
     // Fence synchronous input attempts; the injected transport is fake in M1.
     const receipt = Object.freeze({ requestId, actorId, sessionId: this.sessionId,
       sequence: this.sequence + 1, replayed: false });
-    this.receipts.set(key, { text, receipt });
+    const record = { text, receipt, uncertain: true };
+    this.receipts.set(key, record);
     try { await this.transport.input(text); }
     catch (error) {
       this.emit("INPUT_UNCERTAIN", actorId, { requestId });
       throw new SessionError("INPUT_UNCERTAIN_NO_RETRY");
     }
+    record.uncertain = false;
     this.emit("INPUT_ACCEPTED", actorId, { requestId }); // Never put input text in events.
     return receipt;
   }
