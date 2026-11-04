@@ -2,7 +2,7 @@
 
 OpenConcord is **pre-alpha**. Bug reports, design critiques, documentation improvements and narrowly scoped tests are welcome.
 
-Before a contribution is accepted, its provenance and licensing must be clear. Do not submit code, assets, logs, fixtures or secrets from employers, customers, private repositories or other upstream projects unless you are authorized to redistribute them under compatible terms.
+Before a contribution is accepted, its provenance and licensing must be clear. Never submit credentials, tokens, private keys or other secrets, regardless of purported redistribution rights. Do not submit code, assets, logs or fixtures from employers, customers, private repositories or upstream projects unless you have verified authorization and compatible redistribution rights.
 
 ## Contribution process
 
