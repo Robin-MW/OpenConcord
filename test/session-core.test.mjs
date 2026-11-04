@@ -95,3 +95,27 @@ test("unknown identity, invalid cursor and unapproved control fail closed", () =
   session.attach("a");
   throwsCode(() => session.grantControl("owner", "a"), "NO_REQUEST");
 });
+
+test("tuple replay keys do not collide across actors containing separators", async () => {
+  const { session, writes } = fixture();
+  session.attach("a:b"); session.attach("a");
+  session.requestControl("a:b"); session.grantControl("owner", "a:b");
+  await session.input("a:b", "c", "first");
+  session.requestControl("a"); session.grantControl("owner", "a");
+  await session.input("a", "b:c", "second");
+  assert.deepEqual(writes, ["first", "second"]);
+});
+
+test("acceptance receipt sequence is from actual emitted event after awaited transport", async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const session = new SessionCore({ sessionId: "seq", ownerId: "owner",
+    transport: { input: async () => gate } });
+  const pending = session.input("owner", "x", "content");
+  session.emit("OTHER_EVENT", "owner");
+  release();
+  const receipt = await pending;
+  const last = session.snapshot("owner", 0).events.at(-1);
+  assert.equal(last.type, "INPUT_ACCEPTED");
+  assert.equal(receipt.sequence, last.sequence);
+});
