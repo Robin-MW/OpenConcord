@@ -134,6 +134,8 @@ test("exact byte-limit JSON accepts LF, CRLF and CRLF split across chunks", asyn
     const request = JSON.stringify(init());
     const padded = request + " ".repeat(65536 - Buffer.byteLength(request, "utf8"));
     assert.equal(Buffer.byteLength(padded, "utf8"), 65536);
+    app.child.stdin.write(padded + "\n");
+    assert.equal((await app.read()).result.protocolVersion, "2025-06-18");
     app.child.stdin.write(padded + "\r\n");
     assert.equal((await app.read()).result.protocolVersion, "2025-06-18");
     app.child.stdin.write(padded + "\r");
