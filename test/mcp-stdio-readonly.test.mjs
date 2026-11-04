@@ -109,7 +109,7 @@ test("stdio rejects oversized unterminated messages and recovers at newline", as
   try {
     app.child.stdin.write("x".repeat(70000));
     assert.equal((await app.read()).error.code, -32700);
-    app.child.stdin.write("\\n");
+    app.child.stdin.write("\n");
     app.send(init());
     assert.equal((await app.read()).result.protocolVersion, "2025-06-18");
     app.send(req(2, "tools/list"));
