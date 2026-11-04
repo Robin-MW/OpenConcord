@@ -82,7 +82,7 @@ let incoming = Buffer.alloc(0);
 let discarding = false;
 let serial = Promise.resolve();
 function onLine(bytes) {
-  const line = bytes.toString("utf8").replace(/\\r$/, "");
+  const line = bytes.toString("utf8").replace(/\r$/, "");
   serial = serial.then(async () => {
     let request;
     try { request = JSON.parse(line); }
