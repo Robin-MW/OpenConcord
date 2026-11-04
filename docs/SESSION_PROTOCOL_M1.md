@@ -8,7 +8,7 @@ The fixture simulates one opaque session identity and owner. A client explicitly
 
 Each input carries a per-actor request ID. An accepted ID is never written twice, including concurrent retries. Failed/uncertain transport effects are **not** blindly retried. Input content is intentionally excluded from the fixture event stream.
 
-The injected transport in tests is an array, never a real shell, network socket or remote machine. No OS commands or credentials are accepted.
+The injected transport in tests is an array, never a real shell, network socket or remote machine. The fixture accepts arbitrary input strings (potentially including commands or credentials) but does not validate, classify, redact or execute them. Never send real credentials or attach this input path to a physical terminal.
 
 ## Tests / acceptance
 
