@@ -20,7 +20,7 @@ Only test fixtures are constructed at startup. This process reads newline-delimi
 - `ping`, `tools/list`: supported after initialization.
 - `tools/call`: only `concord_observe` with optional nonnegative integer `after`.
 - `concord_observe`: returns allowlisted synthetic session metadata (cursor, gap flag, controller lease metadata, event type/actor/request identifiers) through MCP `structuredContent` and text `content`.
-- Any `concord_input`, `concord_request_control`, `concord_grant_control`, arbitrary tool or method is rejected. No tool allows user-chosen session IDs or identity parameters.
+- Any `concord_input`, `concord_request_control`, `concord_grant_control` or arbitrary tool/method request with an ID is rejected. Unknown notifications without a request ID are ignored without response; they never authorize a mutation. No tool allows user-chosen session IDs or identity parameters.
 
 The fixture actor is hardcoded, not authenticated. No real user, host, authorization ledger, session output, approval UI, command execution result or persistent request fence exists.
 
