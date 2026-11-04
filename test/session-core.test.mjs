@@ -119,3 +119,14 @@ test("acceptance receipt sequence is from actual emitted event after awaited tra
   assert.equal(last.type, "INPUT_ACCEPTED");
   assert.equal(receipt.sequence, last.sequence);
 });
+
+test("identical request ID belongs independently to two attached actors", async () => {
+  const { session, writes } = fixture();
+  session.attach("agent");
+  await session.input("owner", "shared", "owner-payload");
+  session.requestControl("agent");
+  session.grantControl("owner", "agent");
+  const receipt = await session.input("agent", "shared", "agent-payload");
+  assert.equal(receipt.replayed, false);
+  assert.deepEqual(writes, ["owner-payload", "agent-payload"]);
+});
