@@ -127,3 +127,21 @@ test("pipelined requests preserve response order", async () => {
     assert.equal((await app.read()).id, 21);
   } finally { app.close(); }
 });
+
+test("exact byte-limit JSON accepts LF, CRLF and CRLF split across chunks", async () => {
+  const app = start();
+  try {
+    const request = JSON.stringify(init());
+    const padded = request + " ".repeat(65536 - Buffer.byteLength(request, "utf8"));
+    assert.equal(Buffer.byteLength(padded, "utf8"), 65536);
+    app.child.stdin.write(padded + "\r\n");
+    assert.equal((await app.read()).result.protocolVersion, "2025-06-18");
+    app.child.stdin.write(padded + "\r");
+    app.child.stdin.write("\n");
+    assert.equal((await app.read()).result.protocolVersion, "2025-06-18");
+    app.child.stdin.write(padded + "x\n");
+    assert.equal((await app.read()).error.code, -32700);
+    app.send(req(22, "tools/list"));
+    assert.equal((await app.read()).result.tools.length, 1);
+  } finally { app.close(); }
+});
