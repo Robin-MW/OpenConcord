@@ -82,7 +82,12 @@ let incoming = Buffer.alloc(0);
 let discarding = false;
 let serial = Promise.resolve();
 function onLine(bytes) {
-  const line = bytes.toString("utf8").replace(/\r$/, "");
+  const withoutOptionalCR = bytes.at(-1) === 13 ? bytes.subarray(0, -1) : bytes;
+  if (withoutOptionalCR.length > MAX_LINE) {
+    serial = serial.then(() => send(error(null, -32700, "Message too large")));
+    return;
+  }
+  const line = withoutOptionalCR.toString("utf8");
   serial = serial.then(async () => {
     let request;
     try { request = JSON.parse(line); }
@@ -98,7 +103,9 @@ process.stdin.on("data", chunk => {
     const limit = end === -1 ? chunk.length : end;
     const part = chunk.subarray(offset, limit);
     if (!discarding) {
-      if (incoming.length + part.length > MAX_LINE) {
+      if (incoming.length + part.length > MAX_LINE + 1 ||
+          (incoming.length + part.length === MAX_LINE + 1 &&
+           (end === -1 || part.at(-1) !== 13))) {
         incoming = Buffer.alloc(0);
         discarding = true;
         serial = serial.then(() => send(error(null, -32700, "Message too large")));
