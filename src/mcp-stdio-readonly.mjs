@@ -1,5 +1,4 @@
 // Pre-alpha MCP JSON-RPC 2.0 stdio server. Synthetic, read-only, no network / PTY.
-import { createInterface } from "node:readline";
 import { SessionCore } from "./session-core.mjs";
 import { createMockMcpClient } from "./mock-mcp-client.mjs";
 
@@ -36,7 +35,10 @@ function processMessage(message) {
   if (notification) return null; // No notification may mutate fixture state.
   const id = message.id;
   if (message.method === "initialize") {
-    if (!object(message.params) || typeof message.params.protocolVersion !== "string")
+    if (!object(message.params) || typeof message.params.protocolVersion !== "string" ||
+        !object(message.params.capabilities) || !object(message.params.clientInfo) ||
+        typeof message.params.clientInfo.name !== "string" || !message.params.clientInfo.name ||
+        typeof message.params.clientInfo.version !== "string" || !message.params.clientInfo.version)
       return error(id, -32602, "Invalid params");
     if (message.params.protocolVersion !== PROTOCOL_VERSION)
       return error(id, -32602, "Unsupported protocol version");
@@ -53,7 +55,7 @@ function processMessage(message) {
   if (message.method === "tools/call") {
     if (!object(message.params) || message.params.name !== TOOL_NAME)
       return error(id, -32602, "Unknown or forbidden tool");
-    const args = message.params.arguments ?? {};
+    const args = Object.hasOwn(message.params, "arguments") ? message.params.arguments : {};
     if (!object(args) || Object.keys(args).some(k => k !== "after") ||
       (args.after !== undefined && (!Number.isSafeInteger(args.after) || args.after < 0)))
       return error(id, -32602, "Invalid params");
@@ -75,14 +77,40 @@ async function dispatch(message) {
 function send(message) {
   if (message !== null) process.stdout.write(JSON.stringify(message) + "\n");
 }
-const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
-input.on("line", async line => {
-  if (Buffer.byteLength(line, "utf8") > MAX_LINE) {
-    send(error(null, -32700, "Message too large")); return;
+// Bound memory before a full newline arrives; preserve response order for pipelined calls.
+let incoming = Buffer.alloc(0);
+let discarding = false;
+let serial = Promise.resolve();
+function onLine(bytes) {
+  const line = bytes.toString("utf8").replace(/\\r$/, "");
+  serial = serial.then(async () => {
+    let request;
+    try { request = JSON.parse(line); }
+    catch { send(error(null, -32700, "Parse error")); return; }
+    try { send(await dispatch(request)); }
+    catch { send(error(idValid(request?.id) ? request.id : null, -32603, "Internal error")); }
+  }).catch(() => send(error(null, -32603, "Internal error")));
+}
+process.stdin.on("data", chunk => {
+  let offset = 0;
+  while (offset < chunk.length) {
+    const end = chunk.indexOf(10, offset);
+    const limit = end === -1 ? chunk.length : end;
+    const part = chunk.subarray(offset, limit);
+    if (!discarding) {
+      if (incoming.length + part.length > MAX_LINE) {
+        incoming = Buffer.alloc(0);
+        discarding = true;
+        serial = serial.then(() => send(error(null, -32700, "Message too large")));
+      } else {
+        incoming = Buffer.concat([incoming, part]);
+      }
+    }
+    offset = end === -1 ? chunk.length : end + 1;
+    if (end !== -1) {
+      if (!discarding) onLine(incoming);
+      incoming = Buffer.alloc(0);
+      discarding = false;
+    }
   }
-  let request;
-  try { request = JSON.parse(line); }
-  catch { send(error(null, -32700, "Parse error")); return; }
-  try { send(await dispatch(request)); }
-  catch { send(error(idValid(request?.id) ? request.id : null, -32603, "Internal error")); }
 });
