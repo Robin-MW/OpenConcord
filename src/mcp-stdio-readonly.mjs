@@ -103,9 +103,7 @@ process.stdin.on("data", chunk => {
     const limit = end === -1 ? chunk.length : end;
     const part = chunk.subarray(offset, limit);
     if (!discarding) {
-      if (incoming.length + part.length > MAX_LINE + 1 ||
-          (incoming.length + part.length === MAX_LINE + 1 &&
-           (end === -1 || part.at(-1) !== 13))) {
+      if (incoming.length + part.length > MAX_LINE + 1) {
         incoming = Buffer.alloc(0);
         discarding = true;
         serial = serial.then(() => send(error(null, -32700, "Message too large")));
