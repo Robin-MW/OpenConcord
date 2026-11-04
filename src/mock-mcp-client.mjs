@@ -14,16 +14,32 @@ const ok = (value) => Object.freeze({
   isError: false, structuredContent: Object.freeze({ ok: true, ...value })
 });
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const ALLOWED_EVENTS = new Set([
+  "SESSION_CREATED", "ATTACHED", "CONTROL_REQUESTED", "CONTROL_GRANTED",
+  "CONTROL_RELEASED", "REVOKED", "INPUT_ACCEPTED", "INPUT_UNCERTAIN",
+  "SYNTHETIC_OUTPUT"
+]);
+const validId = s => typeof s === "string" &&
+  /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(s);
+const projectEvent = event => {
+  if (!Number.isSafeInteger(event.sequence) || event.sequence < 1 ||
+      !ALLOWED_EVENTS.has(event.type) || !validId(event.actorId) ||
+      (event.targetId !== undefined && !validId(event.targetId)) ||
+      (event.requestId !== undefined && !validId(event.requestId))) {
+    throw new SessionError("INVALID_EVENT_METADATA");
+  }
+  return Object.freeze({
+    sequence: event.sequence, type: event.type, actorId: event.actorId,
+    ...(event.targetId !== undefined ? { targetId: event.targetId } : {}),
+    ...(event.requestId !== undefined ? { requestId: event.requestId } : {})
+  });
+};
 const metadataOnly = (snapshot) => Object.freeze({
   sessionId: snapshot.sessionId,
   sequence: snapshot.sequence,
   gap: snapshot.gap,
   controller: snapshot.controller,
-  events: Object.freeze(snapshot.events.map(event => Object.freeze({
-    sequence: event.sequence, type: event.type, actorId: event.actorId,
-    ...(typeof event.targetId === "string" ? { targetId: event.targetId } : {}),
-    ...(typeof event.requestId === "string" ? { requestId: event.requestId } : {})
-  })))
+  events: Object.freeze(snapshot.events.map(projectEvent))
 });
 const exact = (args, names) => isObject(args) &&
   Object.keys(args).every(k => names.includes(k));
@@ -41,7 +57,7 @@ export function createMockMcpClient({ session, actorId } = {}) {
       typeof session.grantControl !== "function" ||
       !validActor(actorId)) throw new SessionError("INVALID_ADAPTER_CONFIG");
 
-  const tools = Object.freeze(METHODS.map(t => ({ ...t })));
+  const tools = Object.freeze(METHODS.map(t => Object.freeze({ ...t })));
 
   return Object.freeze({
     listTools() { return Object.freeze({ tools }); },
