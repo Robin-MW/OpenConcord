@@ -1,5 +1,6 @@
 // Pre-alpha MCP JSON-RPC 2.0 stdio server. Synthetic, read-only, no network / PTY.
 import { SessionCore } from "./session-core.mjs";
+import { createLineFramer } from "./stdio-line-framer.mjs";
 import { createMockMcpClient } from "./mock-mcp-client.mjs";
 
 const PROTOCOL_VERSION = "2025-06-18";
@@ -77,17 +78,10 @@ async function dispatch(message) {
 function send(message) {
   if (message !== null) process.stdout.write(JSON.stringify(message) + "\n");
 }
-// Bound memory before a full newline arrives; preserve response order for pipelined calls.
-let incoming = Buffer.alloc(0);
-let discarding = false;
+// Bound memory before a full newline arrives; preserve response ordering.
 let serial = Promise.resolve();
 function onLine(bytes) {
-  const withoutOptionalCR = bytes.at(-1) === 13 ? bytes.subarray(0, -1) : bytes;
-  if (withoutOptionalCR.length > MAX_LINE) {
-    serial = serial.then(() => send(error(null, -32700, "Message too large")));
-    return;
-  }
-  const line = withoutOptionalCR.toString("utf8");
+  const line = bytes.toString("utf8");
   serial = serial.then(async () => {
     let request;
     try { request = JSON.parse(line); }
@@ -96,26 +90,11 @@ function onLine(bytes) {
     catch { send(error(idValid(request?.id) ? request.id : null, -32603, "Internal error")); }
   }).catch(() => send(error(null, -32603, "Internal error")));
 }
-process.stdin.on("data", chunk => {
-  let offset = 0;
-  while (offset < chunk.length) {
-    const end = chunk.indexOf(10, offset);
-    const limit = end === -1 ? chunk.length : end;
-    const part = chunk.subarray(offset, limit);
-    if (!discarding) {
-      if (incoming.length + part.length > MAX_LINE + 1) {
-        incoming = Buffer.alloc(0);
-        discarding = true;
-        serial = serial.then(() => send(error(null, -32700, "Message too large")));
-      } else {
-        incoming = Buffer.concat([incoming, part]);
-      }
-    }
-    offset = end === -1 ? chunk.length : end + 1;
-    if (end !== -1) {
-      if (!discarding) onLine(incoming);
-      incoming = Buffer.alloc(0);
-      discarding = false;
-    }
+const framer = createLineFramer({
+  maxLine: MAX_LINE,
+  onLine,
+  onError: () => {
+    serial = serial.then(() => send(error(null, -32700, "Message too large")));
   }
 });
+process.stdin.on("data", chunk => framer.push(chunk));
